@@ -13,7 +13,7 @@ is_service_installed=$([[ -f $service_plist && -f $kanata_sudoers ]] &> /dev/nul
 is_bootstrapped=$(launchctl print $service_target &> /dev/null; echo $?)
 
 function install {
-  if [[ is_service_installed -eq 0 ]] then
+  if [[ is_service_installed -eq 0 ]]; then
     echo "Kanata service is already installed."
   else
       # rs.kanata.plist launchd config
@@ -37,11 +37,11 @@ clear-logs () {
 }
 
 function start {
-  if [[ $is_service_installed -ne 0 ]] then
+  if [[ $is_service_installed -ne 0 ]]; then
     echo "Service isn't installed."
   else
     clear-logs
-    if [[ is_bootstrapped -eq 0 ]] then
+    if [[ is_bootstrapped -eq 0 ]]; then
       launchctl kickstart $service_target
     else
       launchctl enable $service_target
@@ -53,10 +53,10 @@ function start {
 }
 
 function stop {
-  if [[ is_service_installed -ne 0 ]] then
+  if [[ is_service_installed -ne 0 ]]; then
     echo "Service isn't installed."
   else
-    if [[ is_bootstrapped -eq 0 ]] then
+    if [[ is_bootstrapped -eq 0 ]]; then
       echo "Suspending the server..."
       launchctl bootout gui/$uid $service_plist
       read -d "," -s -t 2 --
@@ -69,10 +69,10 @@ function stop {
 }
 
 function restart {
-  if [[ is_service_installed -ne 0 ]] then
+  if [[ is_service_installed -ne 0 ]]; then
     echo "Service isn't installed."
   else
-    if [[ is_bootstrapped -eq 0 ]] then
+    if [[ is_bootstrapped -eq 0 ]]; then
       clear-logs
       launchctl kickstart -k gui/$uid/$service_name && echo "Service restarting..."
     else
@@ -83,7 +83,7 @@ function restart {
 }
 
 function debug {
-  if [[ is_service_installed -eq 0 ]] then
+  if [[ is_service_installed -eq 0 ]]; then
     tail -n 50 -f $stderr_log
   else
     echo "Service isn't installed."
@@ -91,7 +91,7 @@ function debug {
 }
 
 function info {
-  if [[ is_service_installed -eq 0 ]] then
+  if [[ is_service_installed -eq 0 ]]; then
     [[ is_bootstrapped -eq 0 ]] && launchctl print $service_target || echo "Service not running."
   else
     echo "Service isn't installed"
@@ -99,7 +99,7 @@ function info {
 }
 
 function uninstall {
-  if [[ $is_service_installed -ne 0 ]] then
+  if [[ $is_service_installed -ne 0 ]]; then
     echo "Service isn't installed."
   else
     stop
