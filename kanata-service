@@ -2,7 +2,7 @@
 user=$(whoami)
 uid=$(id -u $user)
 
-service_name='rs.kanata'
+service_name='local.kanata'
 service_target="gui/$uid/$service_name"
 service_plist="$HOME/Library/LaunchAgents/$service_name.plist"
 stderr_log_path="/private/tmp/$service_name.err.log" && touch $stderr_log_path
