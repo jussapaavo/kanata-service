@@ -10,13 +10,13 @@
         <string>/usr/local/bin/dash</string>
     </dict>
     <key>Label</key>
-    <string>rs.kanata</string>
+    <string>{service_name}</string>
     <key>ProgramArguments</key>
     <array>
         <string>sudo</string>
-        <string>{kanata_binary}</string>
+        <string>{kanata_path}</string>
         <string>--cfg</string>
-        <string>{kanata_config}</string>
+        <string>{config_path}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -28,13 +28,12 @@
  	     <true/>
     </dict>
     <key>StandardOutPath</key>
-    <string>{stdout_log}</string>
+    <string>{stdout_log_path}</string>
     <key>StandardErrorPath</key>
-    <string>{stderr_log}</string>
+    <string>{stderr_log_path}</string>
     <key>ProcessType</key>
     <string>Interactive</string>
     <key>Nice</key>
     <integer>-30</integer>
 </dict>
 </plist>
-
