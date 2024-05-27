@@ -141,6 +141,14 @@ function debug {
   fi
 }
 
+function logs {
+  if [[ is_service_installed -eq 0 ]]; then
+    tail -n 50 -f $stdout_log_path
+  else
+    echo "Service isn't installed."
+  fi
+}
+
 function info {
   if [[ is_service_installed -eq 0 ]]; then
     [[ is_bootstrapped -eq 0 ]] && launchctl print $service_target || echo "Service not running."
