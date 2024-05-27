@@ -2,24 +2,75 @@
 user=$(whoami)
 uid=$(id -u $user)
 
+dash_path=$(which dash)
 service_name='local.kanata'
 service_target="gui/$uid/$service_name"
-service_plist="$HOME/Library/LaunchAgents/$service_name.plist"
+service_plist_path="$HOME/Library/LaunchAgents/$service_name.plist"
 stderr_log_path="/private/tmp/$service_name.err.log" && touch $stderr_log_path
 stdout_log_path="/private/tmp/$service_name.out.log" && touch $stdout_log_path
 
 kanata_sudoers='/private/etc/sudoers.d/kanata'
-is_service_installed=$([[ -f $service_plist && -f $kanata_sudoers ]] &> /dev/null; echo $?)
+is_service_installed=$([[ -f $service_plist_path && -f $kanata_sudoers ]] &> /dev/null; echo $?)
 is_bootstrapped=$(launchctl print $service_target &> /dev/null; echo $?)
+
+# Plist template
+read -r -d '' plist_template <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin</string>
+        <key>SHELL</key>
+        <string>{dash_path}</string>
+    </dict>
+    <key>Label</key>
+    <string>{service_name}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>sudo</string>
+        <string>{kanata_path}</string>
+        <string>--cfg</string>
+        <string>{config_path}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+ 	     <false/>
+ 	     <key>Crashed</key>
+ 	     <true/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{stdout_log_path}</string>
+    <key>StandardErrorPath</key>
+    <string>{stderr_log_path}</string>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>Nice</key>
+    <integer>-30</integer>
+</dict>
+</plist>
+EOF
 
 function install {
   if [[ is_service_installed -eq 0 ]]; then
     echo "Kanata service is already installed."
   else
       # rs.kanata.plist launchd config
-      cat ./$service_name.plist | sed "s~{service_name}~$service_name~g" | sed "s~{kanata_path}~$kanata_binary~g" | sed "s~{config_path}~$kanata_config~g" | sed "s~{stderr_log_path}~$stderr_log_path~g" | sed "s~{stdout_log_path}~$stdout_log_path~g" 1> ./$service_name.plist.tmp
+      echo "${plist_template}" \
+        | sed "s~{dash_path}~$dash_path~g" \
+        | sed "s~{service_name}~$service_name~g" \
+        | sed "s~{kanata_path}~$kanata_binary~g" \
+        | sed "s~{config_path}~$kanata_config~g" \
+        | sed "s~{stderr_log_path}~$stderr_log_path~g" \
+        | sed "s~{stdout_log_path}~$stdout_log_path~g" \
+        1> ./$service_name.plist.tmp
       sudo chmod 644 ./$service_name.plist.tmp
-      sudo cp -vp ./$service_name.plist.tmp $service_plist && rm -f ./$service_name.plist.tmp
+      sudo cp -vp ./$service_name.plist.tmp $service_plist_path && rm -f ./$service_name.plist.tmp
 
       # kanata file in sudoers.d
       echo "$user ALL=(root) NOPASSWD: sha256:$(shasum -a 256 $kanata_binary) --cfg $kanata_config" 1> ./kanata.tmp
@@ -45,7 +96,7 @@ function start {
       launchctl kickstart $service_target
     else
       launchctl enable $service_target
-      launchctl bootstrap gui/$uid $service_plist && echo "Kanata service starting..."
+      launchctl bootstrap gui/$uid $service_plist_path && echo "Kanata service starting..."
       sleep 2
       echo "Started."
     fi
@@ -58,7 +109,7 @@ function stop {
   else
     if [[ is_bootstrapped -eq 0 ]]; then
       echo "Suspending the server..."
-      launchctl bootout gui/$uid $service_plist
+      launchctl bootout gui/$uid $service_plist_path
       read -d "," -s -t 2 --
       launchctl disable $service_target
       echo "Suspended."
@@ -104,7 +155,7 @@ function uninstall {
   else
     stop
     echo "Deleting..."
-    sudo rm -vf $service_plist
+    sudo rm -vf $service_plist_path
     sudo rm -vf $kanata_sudoers
     clear-logs
     printf "\n"
