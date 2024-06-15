@@ -3,13 +3,13 @@ user=$(whoami)
 uid=$(id -u $user)
 
 dash_path=$(which dash)
-service_name='local.kanata'
+service_name='local.kanata-tray'
 service_target="gui/$uid/$service_name"
 service_plist_path="$HOME/Library/LaunchAgents/$service_name.plist"
 stderr_log_path="/private/tmp/$service_name.err.log" && touch $stderr_log_path
 stdout_log_path="/private/tmp/$service_name.out.log" && touch $stdout_log_path
 
-kanata_sudoers='/private/etc/sudoers.d/kanata'
+kanata_sudoers='/private/etc/sudoers.d/kanata-tray'
 is_service_installed=$([[ -f $service_plist_path && -f $kanata_sudoers ]] &> /dev/null; echo $?)
 is_bootstrapped=$(launchctl print $service_target &> /dev/null; echo $?)
 
@@ -32,8 +32,6 @@ read -r -d '' plist_template <<'EOF'
     <array>
         <string>sudo</string>
         <string>{kanata_path}</string>
-        <string>--cfg</string>
-        <string>{config_path}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -58,22 +56,22 @@ EOF
 
 function install {
   if [[ is_service_installed -eq 0 ]]; then
-    echo "Kanata service is already installed."
+    echo "Service is already installed."
   else
-      # rs.kanata.plist launchd config
+      # create plist for launchd config
       echo "${plist_template}" \
         | sed "s~{dash_path}~$dash_path~g" \
         | sed "s~{service_name}~$service_name~g" \
         | sed "s~{kanata_path}~$kanata_binary~g" \
-        | sed "s~{config_path}~$kanata_config~g" \
         | sed "s~{stderr_log_path}~$stderr_log_path~g" \
         | sed "s~{stdout_log_path}~$stdout_log_path~g" \
         1> ./$service_name.plist.tmp
+
       sudo chmod 644 ./$service_name.plist.tmp
       sudo cp -vp ./$service_name.plist.tmp $service_plist_path && rm -f ./$service_name.plist.tmp
 
-      # kanata file in sudoers.d
-      echo "$user ALL=(root) NOPASSWD: sha256:$(shasum -a 256 $kanata_binary) --cfg $kanata_config" 1> ./kanata.tmp
+      # setup sudoers.d
+      echo "$user ALL=(root) NOPASSWD: sha256:$(shasum -a 256 $kanata_binary)" 1> ./kanata.tmp
       sudo chown root:wheel ./kanata.tmp
       sudo chmod 600 ./kanata.tmp
       sudo cp -vp ./kanata.tmp $kanata_sudoers && rm -rf ./kanata.tmp
@@ -96,7 +94,7 @@ function start {
       launchctl kickstart $service_target
     else
       launchctl enable $service_target
-      launchctl bootstrap gui/$uid $service_plist_path && echo "Kanata service starting..."
+      launchctl bootstrap gui/$uid $service_plist_path && echo "Service is starting..."
       sleep 2
       echo "Started."
     fi
@@ -173,16 +171,16 @@ function uninstall {
 
 function help {
   echo "Usage:
-    Installation: kanata-service install <kanata_binary> <kanata_config>
+    Installation: kanata-service install <kanata_binary>
     Other: kanata-service <command>
 
 Available commands:
-    1. install - installs the launchd com.kanata.plist file & and adds kanata to sudoers.d
-    2. uninstall - deletes the launchd com.kanata.plist file & removes the kanata sudoers.d
+    1. install - installs the launchd plist file & and adds kanata-tray to sudoers.d
+    2. uninstall - deletes the launchd plist file & removes the kanata-tray sudoers.d
     3. start - starts the service
     4. stop - stops the service
     5. restart - restarts the service
-    6. info - prints properties of the com.kanata launchd service
+    6. info - prints properties of the launchd service
     7. debug - concatenates the stderr.log to stdout"
 }
 
@@ -198,10 +196,9 @@ main () {
       help ;;
     1)
       [[ "$1" != "install" ]] && $1 || invalid-syntax ;;
-    3)
+    2)
       if [[ "$1" == "install" ]]; then
         kanata_binary=$(realpath $2)
-        kanata_config=$(realpath $3)
         $1
       else
         invalid-syntax
