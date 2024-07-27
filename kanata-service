@@ -25,6 +25,8 @@ read -r -d '' plist_template <<'EOF'
         <string>/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin</string>
         <key>SHELL</key>
         <string>{dash_path}</string>
+        <key>XDG_CONFIG_HOME</key>
+        <string>/Users/{user}/.config</string>
     </dict>
     <key>Label</key>
     <string>{service_name}</string>
@@ -61,6 +63,7 @@ function install {
       # create plist for launchd config
       echo "${plist_template}" \
         | sed "s~{dash_path}~$dash_path~g" \
+        | sed "s~{user}~$user~g" \
         | sed "s~{service_name}~$service_name~g" \
         | sed "s~{kanata_path}~$kanata_binary~g" \
         | sed "s~{stderr_log_path}~$stderr_log_path~g" \
