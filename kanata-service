@@ -25,6 +25,8 @@ read -r -d '' plist_template <<'EOF'
         <string>/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin</string>
         <key>SHELL</key>
         <string>{dash_path}</string>
+        <key>KANATA_TRAY_CONFIG_DIR</key>
+        <string>/Users/{user}/.config/kanata-tray</string>
     </dict>
     <key>Label</key>
     <string>{service_name}</string>
@@ -61,6 +63,7 @@ function install {
       # create plist for launchd config
       echo "${plist_template}" \
         | sed "s~{dash_path}~$dash_path~g" \
+        | sed "s~{user}~$user~g" \
         | sed "s~{service_name}~$service_name~g" \
         | sed "s~{kanata_path}~$kanata_binary~g" \
         | sed "s~{stderr_log_path}~$stderr_log_path~g" \
@@ -71,7 +74,11 @@ function install {
       sudo cp -vp ./$service_name.plist.tmp $service_plist_path && rm -f ./$service_name.plist.tmp
 
       # setup sudoers.d
-      echo "$user ALL=(root) NOPASSWD: sha256:$(shasum -a 256 $kanata_binary)" 1> ./kanata.tmp
+      histchars=
+      printf "Defaults!$kanata_binary env_keep+=KANATA_TRAY_CONFIG_DIR\n$user ALL=(root) NOPASSWD: sha256:$(shasum -a 256 $kanata_binary)\n" \
+        1> ./kanata.tmp
+      unset histchars
+
       sudo chown root:wheel ./kanata.tmp
       sudo chmod 600 ./kanata.tmp
       sudo cp -vp ./kanata.tmp $kanata_sudoers && rm -rf ./kanata.tmp
