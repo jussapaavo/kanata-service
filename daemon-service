@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+
+user=$(whoami)
+uid=$(id -u $user)
+dash_path=$(which dash)
+
+service_name="Karabiner-VirtualHIDDevice-Daemon"
+service_id="local.$service_name"
+service_target="gui/$uid/$service_id"
+service_plist_path="$HOME/Library/LaunchAgents/$service_id.plist"
+service_stderr_log_path="/private/tmp/$service_id.err.log" && touch $service_stderr_log_path
+service_stdout_log_path="/private/tmp/$service_id.out.log" && touch $service_stdout_log_path
+service_sudoers_path="/private/etc/sudoers.d/$service_name"
+service_run_path="/Library/Application Support/org.pqrs/Karabiner-DriverKit-VirtualHIDDevice/Applications/Karabiner-VirtualHIDDevice-Daemon.app/Contents/MacOS/Karabiner-VirtualHIDDevice-Daemon"
+
+is_service_installed=$([[ -f $service_plist_path && -f $service_sudoers_path ]] &> /dev/null; echo $?)
+is_bootstrapped=$(launchctl print $service_target &> /dev/null; echo $?)
+
+# Service plist template
+read -r -d '' plist_template <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin</string>
+        <key>SHELL</key>
+        <string>{dash_path}</string>
+    </dict>
+    <key>Label</key>
+    <string>{service_id}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>sudo</string>
+        <string>{service_run_path}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+ 	     <false/>
+ 	     <key>Crashed</key>
+ 	     <true/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{stdout_log_path}</string>
+    <key>StandardErrorPath</key>
+    <string>{stderr_log_path}</string>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>Nice</key>
+    <integer>-30</integer>
+</dict>
+</plist>
+EOF
+
+function install {
+  if [[ is_service_installed -eq 0 ]]; then
+    echo "Service is already installed."
+  else
+    # create plist files for launchd config
+    echo "${plist_template}" \
+    | sed \
+        -e "s~{dash_path}~$dash_path~g" \
+        -e "s~{user}~$user~g" \
+        -e "s~{service_id}~$service_id~g" \
+        -e "s~{service_run_path}~$service_run_path~g" \
+        -e "s~{stderr_log_path}~$service_stderr_log_path~g" \
+        -e "s~{stdout_log_path}~$service_stdout_log_path~g" \
+    1> ./$service_id.plist.tmp
+
+    # verify plist file and install if valid
+    if plutil -lint ./$service_id.plist.tmp; then
+      sudo chmod 644 ./$service_id.plist.tmp
+      sudo cp -vp ./$service_id.plist.tmp $service_plist_path && rm -f ./$service_id.plist.tmp
+    else
+      echo "Plist file is not valid. Exiting..."
+      rm -f ./$service_id.plist.tmp
+      exit 1
+    fi
+
+    # setup sudoers.d
+    histchars=
+    shasum=$(shasum -a 256 "$service_run_path" | awk '{ print $1 }')
+    run_path_without_spaces=$(echo $service_run_path | sed -e 's/ /\\ /g')
+    printf "$user ALL=(root) NOPASSWD: sha256:$shasum $run_path_without_spaces\n" \
+      1> ./$service_name.tmp
+    unset histchars
+
+    sudo chown root:wheel ./$service_name.tmp
+    sudo chmod 600 ./$service_name.tmp
+    sudo cp -vp ./$service_name.tmp $service_sudoers_path && rm -rf ./$service_name.tmp
+
+    printf "\n"
+    echo "Installed service."
+  fi
+}
+
+clear-logs () {
+  [[ -f $service_stderr_log_path ]] && truncate -s 0 $service_stderr_log_path
+  [[ -f $service_stdout_log_path ]] && truncate -s 0 $service_stdout_log_path
+}
+
+function start {
+  if [[ $is_service_installed -ne 0 ]]; then
+    echo "Service isn't installed."
+  else
+    clear-logs
+    if [[ is_bootstrapped -eq 0 ]]; then
+      launchctl kickstart $service_target
+    else
+      launchctl enable $service_target
+      launchctl bootstrap gui/$uid $service_plist_path && echo "Service is starting..."
+      sleep 2
+      echo "Started."
+    fi
+  fi
+}
+
+function stop {
+  if [[ is_service_installed -ne 0 ]]; then
+    echo "Service isn't installed."
+  else
+    if [[ is_bootstrapped -eq 0 ]]; then
+      echo "Suspending the server..."
+      launchctl bootout gui/$uid $service_plist_path
+      read -d "," -s -t 2 --
+      launchctl disable $service_target
+      echo "Suspended."
+    else
+      launchctl kill 9 $service_target &> /dev/null
+    fi
+  fi
+}
+
+function restart {
+  if [[ is_service_installed -ne 0 ]]; then
+    echo "Service isn't installed."
+  else
+    if [[ is_bootstrapped -eq 0 ]]; then
+      clear-logs
+      launchctl kickstart -k gui/$uid/$service_id && echo "Service restarting..."
+    else
+      stop
+      start
+    fi
+  fi
+}
+
+function debug {
+  if [[ is_service_installed -eq 0 ]]; then
+    tail -n 50 -f $service_stderr_log_path
+  else
+    echo "Service isn't installed."
+  fi
+}
+
+function logs {
+  if [[ is_service_installed -eq 0 ]]; then
+    tail -n 50 -f $stdout_log_path
+  else
+    echo "Service isn't installed."
+  fi
+}
+
+function info {
+  if [[ is_service_installed -eq 0 ]]; then
+    [[ is_bootstrapped -eq 0 ]] && launchctl print $service_target || echo "Service not running."
+  else
+    echo "Service isn't installed"
+  fi
+}
+
+function uninstall {
+  if [[ $is_service_installed -ne 0 ]]; then
+    echo "Service isn't installed."
+  else
+    stop
+    echo "Deleting..."
+    sudo rm -vf $service_plist_path
+    sudo rm -vf $service_sudoers_path
+    clear-logs
+    printf "\n"
+    echo "Uninstalled service"
+  fi
+}
+
+function help {
+  echo "Usage:
+    Installation: daemon-service install <service_run_path>
+    Other: daemon-service <command>
+
+Available commands:
+    1. install - installs the launchd plist file & and adds execution permission to sudoers.d
+    2. uninstall - deletes the launchd plist file & removes the permissions from sudoers.d
+    3. start - starts the service
+    4. stop - stops the service
+    5. restart - restarts the service
+    6. info - prints properties of the launchd service
+    7. debug - concatenates the stderr.log to stdout"
+}
+
+invalid-syntax () {
+  echo 'Invalid syntax'
+  printf '\n'
+  help
+}
+
+main () {
+  case $# in
+    0)
+      help ;;
+    1)
+      $1 || invalid-syntax ;;
+    *)
+      invalid-syntax ;;
+  esac
+}
+
+main $1 $2 $3
