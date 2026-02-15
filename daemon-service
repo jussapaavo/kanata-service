@@ -58,7 +58,7 @@ read -r -d '' plist_template <<'EOF'
 EOF
 
 function install {
-  if [[ is_service_installed -eq 0 ]]; then
+  if [[ $is_service_installed -eq 0 ]]; then
     echo "Service is already installed."
   else
     # create plist files for launchd config
@@ -109,7 +109,7 @@ function start {
     echo "Service isn't installed."
   else
     clear-logs
-    if [[ is_bootstrapped -eq 0 ]]; then
+    if [[ $is_bootstrapped -eq 0 ]]; then
       launchctl kickstart $service_target
     else
       launchctl enable $service_target
@@ -121,10 +121,10 @@ function start {
 }
 
 function stop {
-  if [[ is_service_installed -ne 0 ]]; then
+  if [[ $is_service_installed -ne 0 ]]; then
     echo "Service isn't installed."
   else
-    if [[ is_bootstrapped -eq 0 ]]; then
+    if [[ $is_bootstrapped -eq 0 ]]; then
       echo "Suspending the server..."
       launchctl bootout gui/$uid $service_plist_path
       read -d "," -s -t 2 --
@@ -137,10 +137,10 @@ function stop {
 }
 
 function restart {
-  if [[ is_service_installed -ne 0 ]]; then
+  if [[ $is_service_installed -ne 0 ]]; then
     echo "Service isn't installed."
   else
-    if [[ is_bootstrapped -eq 0 ]]; then
+    if [[ $is_bootstrapped -eq 0 ]]; then
       clear-logs
       launchctl kickstart -k gui/$uid/$service_id && echo "Service restarting..."
     else
@@ -151,7 +151,7 @@ function restart {
 }
 
 function debug {
-  if [[ is_service_installed -eq 0 ]]; then
+  if [[ $is_service_installed -eq 0 ]]; then
     tail -n 50 -f $service_stderr_log_path
   else
     echo "Service isn't installed."
@@ -159,16 +159,16 @@ function debug {
 }
 
 function logs {
-  if [[ is_service_installed -eq 0 ]]; then
-    tail -n 50 -f $stdout_log_path
+  if [[ $is_service_installed -eq 0 ]]; then
+    tail -n 50 -f $service_stdout_log_path
   else
     echo "Service isn't installed."
   fi
 }
 
 function info {
-  if [[ is_service_installed -eq 0 ]]; then
-    [[ is_bootstrapped -eq 0 ]] && launchctl print $service_target || echo "Service not running."
+  if [[ $is_service_installed -eq 0 ]]; then
+    [[ $is_bootstrapped -eq 0 ]] && launchctl print $service_target || echo "Service not running."
   else
     echo "Service isn't installed"
   fi
