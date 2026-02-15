@@ -7,6 +7,8 @@ dash_path=$(which dash)
 service_name="kanata-tray"
 service_id="local.$service_name"
 service_target="gui/$uid/$service_id"
+brew_package_path=$(readlink -f $(brew --prefix $service_name))
+service_run_path=$brew_package_path/bin/$service_name
 service_plist_path="$HOME/Library/LaunchAgents/$service_id.plist"
 service_stderr_log_path="/private/tmp/$service_id.err.log" && touch $service_stderr_log_path
 service_stdout_log_path="/private/tmp/$service_id.out.log" && touch $service_stdout_log_path
@@ -62,6 +64,7 @@ function install {
   if [[ $is_service_installed -eq 0 ]]; then
     echo "Service is already installed."
   else
+    echo "Using $service_run_path as the service executable."
     # create plist files for launchd config
     echo "${plist_template}" \
     | sed \
@@ -215,18 +218,10 @@ main () {
     0)
       help ;;
     1)
-      [[ "$1" != "install" ]] && $1 || invalid-syntax ;;
-    2)
-      if [[ "$1" == "install" ]]; then
-        service_run_path=$(realpath $2)
-        $1
-      else
-        invalid-syntax
-      fi
-      ;;
+      $1 || invalid-syntax ;;
     *)
       invalid-syntax ;;
   esac
 }
 
-main $1 $2 $3
+main $1
